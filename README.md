@@ -22,3 +22,9 @@ Highlight your results about seasonal riding, trip duration, weekend behavior, c
 1. Target casual riders at popular recreational destinations
 2. Launch seasonal and weekend-focused campaigns
 3. Promote membership as an everyday transportation option
+
+## Project files
+
+[Visualisations](Cyclistic-Bike-Share-Case-Study-1/images)
+
+## [Read the full case study](https://medium.com/@julianampenna/introductions-are-in-order-6f9b1c13c94a)
