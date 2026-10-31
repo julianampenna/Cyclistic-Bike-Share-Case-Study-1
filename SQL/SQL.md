@@ -1,1 +1,597 @@
+# Data Manipulation Log (SQL Queries)
 
+## Combining all months into one table
+
+CREATE OR REPLACE TABLE `deft-condition-312117.casestudy1.202503_202609` AS
+
+SELECT * FROM `deft-condition-312117.casestudy1.2025FULL`
+
+  UNION ALL
+
+  SELECT * FROM `deft-condition-312117.casestudy1.2026_full`
+
+## Cleaning
+
+### Checking how many rows contain NULL start or ending times:
+
+SELECT
+
+ COUNT(*) AS trips_with_null_timestamps
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE started_at IS NULL
+
+  OR ended_at IS NULL;
+
+### Delete invalid trips (trips with under a minute duration):
+
+DELETE FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE started_at IS NULL
+
+  OR ended_at IS NULL
+
+  OR TIMESTAMP_DIFF(ended_at, started_at, SECOND) <= 0;
+
+### Checking for duplicate rows: (zero occurrences) 
+
+SELECT
+
+ TO_JSON_STRING(t) AS row_data,
+
+ COUNT(*) AS occurrences
+
+FROM `deft-condition-312117.casestudy1.202503_202609` AS t
+
+GROUP BY row_data
+
+HAVING COUNT(*) > 1
+
+ORDER BY occurrences DESC;
+
+### Checking for duplicate trip IDs: (zero occurrences)
+
+CREATE OR REPLACE TABLE `deft-condition-312117.casestudy1.202503_202609` AS
+
+SELECT *
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+QUALIFY ROW_NUMBER() OVER (
+
+ PARTITION BY ride_id
+
+ ORDER BY started_at
+
+) = 1;
+
+## Analysis queries
+
+### Total trips (member and casual) per season:
+
+SELECT
+
+ CASE
+ 
+   WHEN EXTRACT(MONTH FROM started_at)
+   
+     IN (12, 1, 2) THEN 'Winter'
+   
+   WHEN EXTRACT(MONTH FROM started_at)
+   
+     IN (3, 4, 5) THEN 'Spring'
+   
+   WHEN EXTRACT(MONTH FROM started_at)
+   
+     IN (6, 7, 8) THEN 'Summer'
+   
+   ELSE 'Autumn'
+ 
+ END AS season,
+ 
+ member_casual,
+ 
+ COUNT(*) AS total_rides
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+GROUP BY season, member_casual
+
+ORDER BY season, member_casual;
+
+### Checking for average trip time per season:
+
+SELECT
+
+ CASE
+ 
+   WHEN EXTRACT(MONTH FROM started_at) IN (12, 1, 2)
+   
+     THEN 'Winter'
+   
+   WHEN EXTRACT(MONTH FROM started_at) IN (3, 4, 5)
+   
+     THEN 'Spring'
+   
+   WHEN EXTRACT(MONTH FROM started_at) IN (6, 7, 8)
+   
+     THEN 'Summer'
+   
+   ELSE 'Autumn'
+ 
+ END AS season,
+
+ ROUND(
+ 
+   AVG(TIMESTAMP_DIFF(ended_at, started_at, SECOND)) / 60,
+   
+   2
+ 
+ ) AS avg_trip_minutes
+ 
+ FROM `deft-condition-312117.casestudy1.202503_202609`
+
+
+WHERE started_at IS NOT NULL
+
+ AND ended_at > started_at
+
+
+GROUP BY season
+
+ORDER BY
+
+ CASE season
+ 
+   WHEN 'Winter' THEN 1
+   
+   WHEN 'Spring' THEN 2
+   
+   WHEN 'Summer' THEN 3
+   
+   WHEN 'Autumn' THEN 4
+ 
+ END;
+
+### Comparing seasonal average trip time between member and casual trips
+
+SELECT
+
+ CASE
+ 
+   WHEN EXTRACT(MONTH FROM started_at) IN (12, 1, 2)
+   
+     THEN 'Winter'
+   
+   WHEN EXTRACT(MONTH FROM started_at) IN (3, 4, 5)
+   
+     THEN 'Spring'
+   
+   WHEN EXTRACT(MONTH FROM started_at) IN (6, 7, 8)
+   
+     THEN 'Summer'
+   
+   ELSE 'Autumn'
+ 
+ END AS season,
+
+ member_casual,
+
+ COUNT(*) AS total_rides,
+
+ ROUND(
+ 
+   AVG(TIMESTAMP_DIFF(ended_at, started_at, SECOND)) / 60,
+   
+   2
+ 
+ ) AS avg_trip_minutes
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE started_at IS NOT NULL
+
+ AND ended_at > started_at
+
+GROUP BY season, member_casual
+
+ORDER BY
+
+ CASE season
+ 
+   WHEN 'Winter' THEN 1
+   
+   WHEN 'Spring' THEN 2
+   
+   WHEN 'Summer' THEN 3
+   
+   WHEN 'Autumn' THEN 4
+ 
+ END,
+ 
+ member_casual;
+
+### Checking for the most popular start station for casual rides
+
+SELECT
+ 
+ start_station_name,
+ 
+ COUNT(*) AS total_rides
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE member_casual = 'casual'
+
+ AND start_station_name IS NOT NULL
+
+GROUP BY start_station_name
+
+ORDER BY total_rides DESC
+
+LIMIT 10;
+
+### Checking for the most popular end station for casual rides:
+
+SELECT
+
+ end_station_name,
+ 
+ COUNT(*) AS total_rides
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE member_casual = 'casual'
+
+ AND end_station_name IS NOT NULL
+
+GROUP BY end_station_name
+
+ORDER BY total_rides DESC
+
+LIMIT 10;
+
+### Checking for same start and end station for casual rides
+
+SELECT
+
+ start_station_name,
+ 
+ end_station_name,
+ 
+ COUNT(*) AS total_rides
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE member_casual = 'casual'
+
+ AND start_station_name IS NOT NULL
+ 
+ AND end_station_name IS NOT NULL
+
+GROUP BY
+
+ start_station_name,
+ 
+ end_station_name
+
+ORDER BY total_rides DESC
+
+LIMIT 10;
+
+### Comparing member and casual total trips by start station
+
+SELECT
+
+ start_station_name,
+ 
+ COUNTIF(member_casual = 'casual') AS casual_rides,
+ 
+ COUNTIF(member_casual = 'member') AS member_rides,
+ 
+ COUNT(*) AS total_rides
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE start_station_name IS NOT NULL
+
+ AND member_casual IN ('casual', 'member')
+
+GROUP BY start_station_name
+
+ORDER BY casual_rides DESC
+
+LIMIT 10;
+
+### Comparing same start-end stations between member and casual rides
+
+SELECT
+
+ member_casual,
+ 
+ COUNT(*) AS total_rides,
+ 
+ COUNTIF(
+ 
+   start_station_id = end_station_id
+   
+   AND start_station_id IS NOT NULL
+ 
+ ) AS same_station_rides,
+
+ ROUND(
+ 
+   100 * SAFE_DIVIDE(
+   
+     COUNTIF(
+     
+       start_station_id = end_station_id
+       
+       AND start_station_id IS NOT NULL
+     
+     ),
+     
+     COUNT(*)
+   
+   ),
+   
+   2
+ 
+ ) AS same_station_percentage
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE member_casual IN ('casual', 'member')
+
+GROUP BY member_casual;
+
+### Checking the most popular start and end stations for members
+
+SELECT
+
+ start_station_name,
+ 
+ end_station_name,
+ 
+ COUNT(*) AS total_rides
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE member_casual = 'member'
+
+ AND start_station_name IS NOT NULL
+ 
+ AND end_station_name IS NOT NULL
+
+GROUP BY
+
+ start_station_name,
+ 
+ end_station_name
+
+ORDER BY total_rides DESC
+
+LIMIT 10;
+
+### Comparing total rides and average trip time between member and casual trips per each day of the week
+
+SELECT
+
+ FORMAT_DATE('%A', DATE(started_at)) AS day_of_week,
+ 
+ member_casual,
+ 
+ COUNT(*) AS total_rides,
+ 
+ ROUND(
+ 
+   AVG(
+   
+     TIMESTAMP_DIFF(ended_at, started_at, SECOND)
+   
+   ) / 60,
+   
+   2
+ 
+ ) AS avg_trip_minutes
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE started_at IS NOT NULL
+
+ AND ended_at > started_at
+ 
+ AND member_casual IN ('member', 'casual')
+
+GROUP BY day_of_week, member_casual
+
+ORDER BY
+
+ CASE day_of_week
+ 
+   WHEN 'Monday' THEN 1
+   
+   WHEN 'Tuesday' THEN 2
+   
+   WHEN 'Wednesday' THEN 3
+   
+   WHEN 'Thursday' THEN 4
+   
+   WHEN 'Friday' THEN 5
+   
+   WHEN 'Saturday' THEN 6
+   
+   WHEN 'Sunday' THEN 7
+ 
+ END,
+ 
+ member_casual;
+
+### Comparing total trips and average time between casual and member trips between weekdays and weekends
+
+SELECT
+ 
+ CASE
+ 
+   WHEN EXTRACT(DAYOFWEEK FROM started_at)
+   
+     IN (1, 7) THEN 'Weekend'
+   
+   ELSE 'Weekday'
+ 
+ END AS day_type,
+ 
+ member_casual,
+ 
+ COUNT(*) AS total_rides,
+ 
+ ROUND(
+ 
+   AVG(
+   
+     TIMESTAMP_DIFF(ended_at, started_at, SECOND)
+   
+   ) / 60,
+   
+   2
+
+ ) AS avg_trip_minutes
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE started_at IS NOT NULL
+
+ AND ended_at > started_at
+
+GROUP BY day_type, member_casual
+
+ORDER BY day_type, member_casual;
+
+### Comparing total trips between casual and member trips per hour of day
+
+SELECT
+
+ EXTRACT(HOUR FROM started_at) AS hour_of_day,
+ 
+ member_casual,
+ 
+ COUNT(*) AS total_rides
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE started_at IS NOT NULL
+
+ AND member_casual IN ('member', 'casual')
+
+GROUP BY hour_of_day, member_casual
+
+ORDER BY hour_of_day, member_casual;
+
+### Comparing total trips between casual and member trips per hour of day, between weekdays and weekend
+
+WITH daily_hourly AS (
+
+ SELECT
+ 
+   DATE(started_at) AS ride_date,
+   
+   CASE
+   
+     WHEN EXTRACT(DAYOFWEEK FROM started_at) IN (1, 7)
+     
+       THEN 'Weekend'
+     
+     ELSE 'Weekday'
+   
+   END AS day_type,
+   
+   EXTRACT(HOUR FROM started_at) AS hour_of_day,
+   
+   member_casual,
+   
+   COUNT(*) AS rides
+
+FROM `deft-condition-312117.casestudy1.202503_202609`
+
+WHERE started_at IS NOT NULL
+
+   AND member_casual IN ('member', 'casual')
+ 
+ GROUP BY 1, 2, 3, 4),
+
+calendar AS (
+
+ SELECT
+ 
+   ride_date,
+   
+   CASE
+   
+     WHEN EXTRACT(DAYOFWEEK FROM ride_date) IN (1, 7)
+     
+       THEN 'Weekend'
+     
+     ELSE 'Weekday'
+   
+   END AS day_type
+ 
+ FROM UNNEST(
+ 
+   GENERATE_DATE_ARRAY('2025-03-01', '2026-09-30')
+ 
+ ) AS ride_date
+
+)
+
+SELECT
+
+ c.day_type,
+ 
+ h.hour_of_day,
+ 
+ h.member_casual,
+ 
+ ROUND(
+ 
+   SUM(COALESCE(d.rides, 0)) /
+   
+   COUNT(DISTINCT c.ride_date),
+   
+   2
+ 
+ ) AS avg_rides_per_day
+
+FROM calendar c
+
+CROSS JOIN (
+
+ SELECT hour_of_day, member_casual
+ 
+ FROM UNNEST(GENERATE_ARRAY(0, 23)) AS hour_of_day
+ 
+ CROSS JOIN UNNEST(['member', 'casual']) AS member_casual
+
+) h
+
+LEFT JOIN daily_hourly d
+
+ ON c.ride_date = d.ride_date
+ 
+ AND h.hour_of_day = d.hour_of_day
+ 
+ AND h.member_casual = d.member_casual
+
+WHERE c.day_type = CASE
+
+ WHEN EXTRACT(DAYOFWEEK FROM c.ride_date) IN (1, 7)
+ 
+   THEN 'Weekend'
+ 
+ ELSE 'Weekday'
+
+END
+
+GROUP BY c.day_type, h.hour_of_day, h.member_casual
+
+ORDER BY c.day_type, h.hour_of_day, h.member_casual;
