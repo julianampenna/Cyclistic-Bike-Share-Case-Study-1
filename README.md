@@ -26,6 +26,7 @@ Highlight your results about seasonal riding, trip duration, weekend behavior, c
 ## Project files
 
 [Visualizations](images/)
+
 [SQL Queries](SQL/)
 
 ## Read the full case study
