@@ -1,0 +1,44 @@
+# Combining all months into one table
+
+CREATE OR REPLACE TABLE `deft-condition-312117.casestudy1.202503_202609` AS
+
+  SELECT * FROM `deft-condition-312117.casestudy1.2025FULL`
+  UNION ALL
+  SELECT * FROM `deft-condition-312117.casestudy1.2026_full`
+
+# Cleaning
+
+## 1. Checking how many rows contain NULL start or ending times:
+
+SELECT
+   COUNT(*) AS trips_with_null_timestamps
+FROM `deft-condition-312117.casestudy1.202503_202609`
+WHERE started_at IS NULL
+  OR ended_at IS NULL;
+
+## 2. Delete invalid trips (trips with under a minute duration):
+
+DELETE FROM `deft-condition-312117.casestudy1.202503_202609`
+WHERE started_at IS NULL
+  OR ended_at IS NULL
+  OR TIMESTAMP_DIFF(ended_at, started_at, SECOND) <= 0;
+
+## 3. Checking for duplicate rows: (zero occurrences) 
+
+SELECT
+ TO_JSON_STRING(t) AS row_data,
+ COUNT(*) AS occurrences
+FROM `deft-condition-312117.casestudy1.202503_202609` AS t
+GROUP BY row_data
+HAVING COUNT(*) > 1
+ORDER BY occurrences DESC;
+
+## 4. Checking for duplicate trip IDs: (zero occurrences)
+
+CREATE OR REPLACE TABLE `deft-condition-312117.casestudy1.202503_202609` AS
+SELECT *
+FROM `deft-condition-312117.casestudy1.202503_202609`
+QUALIFY ROW_NUMBER() OVER (
+ PARTITION BY ride_id
+ ORDER BY started_at
+) = 1;
