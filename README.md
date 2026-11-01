@@ -43,7 +43,7 @@ Taken together, these findings suggest that Cyclistic's two customer categories 
 
 [SQL Queries](SQL/)
 
-[Report](Report/Cyclistic Bike-Share Case Study 1_report.pdf)
+[Report](Report/)
 
 ## Read the full case study
 [Case Study report on Medium! :)](https://medium.com/@julianampenna/introductions-are-in-order-6f9b1c13c94a)
